@@ -1,15 +1,10 @@
-﻿# RD-Sessionhosts sperren
+﻿# Skript zum Sperren von RD-Sessionhosts
+# Stannek GmbH - v.1.2 - 08.06.2022 - E.Sauerbier, G.Werner
 
-# Stannek GmbH - E.Sauerbier, G.Werner
-# Erste Version 1.1 - 25.08.2021
-# 22.07.21 - 1.0 GW, GUI mit Auswahl eingefügt
-# 25.08.21 - 1.1 ES, Auswahl für Farm bei mehreren Farmen eingefügt
-#              Ausführbarkeit am SessionHost ermöglicht  
-
-# Funktionen
+## Funktionen laden
 
 # Funktion zum Sperren der ausgewählten SessionHosts
-function Hauptprogramm() 
+function Set-SessionHostLogonState() 
 {
     $Ausgabe=''
     $controls=$objForm.controls
@@ -27,12 +22,11 @@ function Hauptprogramm()
             }
         }
     }
-    #cls
     [System.Windows.Forms.MessageBox]::Show($Ausgabe , 'Fertig') 
 }
 
-# Funktion zur Farmauswahl
-function Collection-Selection() 
+# Funktion zur Auswahl der RD-Collection (Farm)
+function Select-RDCollection() 
 {
     $Global:Cancel = $false
     $controls=$objForm.controls
@@ -40,7 +34,7 @@ function Collection-Selection()
     foreach ($co in $controls) {
         if ($co.Name -like "Checkbox*") {
             if ($co.Checked) { 
-                # gewählte Sessionfarm setzen
+                # gewählte RD-Collection setzen
                 $Global:Collection = $Null
                 $Global:Collection += $co.Text
             }
@@ -50,30 +44,37 @@ function Collection-Selection()
     if ($Global:Collection.Count -gt "1") {$Global:Cancel = "Error"}
 }
 
-function script-exit(){
+function exit-Script(){
   $Global:Cancel = "Cancel"
   $objForm.Close()
 }
 
+## Funktionen laden Ende
 
 # Assemblys laden
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
-    
-cls
-write-host 'Bitte warten...'
 
-# Broker und Farmname auslesen
-$Broker = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings" -Name "SessionDirectoryLocation").SessionDirectoryLocation
-$Global:Collection = Get-RDSessionCollection -ConnectionBroker $Broker | Select-Object -ExpandProperty CollectionName
-$associatedCollection = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings" -Name "SessionDirectoryClusterName").SessionDirectoryClusterName
+# Globale Abbruch-Variable zurücksetzen
 $Global:Cancel = $false
-cls
 
-# Wenn Skript am Sessionhost ausgeführt wird, kommt keine Farmabfrage
-if ($associatedCollection -ne "") {$Global:Collection = $associatedCollection}
+# Broker auslesen
+$Broker = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings" -Name "SessionDirectoryLocation").SessionDirectoryLocation
 
-# Falls mehr als eine Farm existiert dann Farm abfragen
+# Registry auslesen ob es sich um Sessionhost handelt
+$associatedCollection = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings" -Name "SessionDirectoryClusterName").SessionDirectoryClusterName
+
+# Abfrage des Farmnamens je nach Typ des ausführenden Servers (Sessionhost / Connectionbroker)
+If ($associatedCollection -ne "") {#Farmnamen vom Sessionhost
+      $Global:Collection = $associatedCollection
+      }
+Else {# Abfrage des Farmnamens am ConnectionBroker
+      $Global:Collection = Get-RDSessionCollection -ConnectionBroker $Broker | Select-Object -ExpandProperty CollectionName
+     }
+
+
+# Falls mehr als eine Farm existiert dann wird die Farm abgefragen
+## Abfrage Farm
 if ($Global:Collection.Count -gt 1) 
     {
     $objForm = New-Object System.Windows.Forms.Form
@@ -86,6 +87,8 @@ if ($Global:Collection.Count -gt 1)
     $X1=10
     $X2=150
     $H=20
+
+
     $objLabel = New-Object System.Windows.Forms.Label
     $objLabel.Location = New-Object System.Drawing.Point($x1,20)
     $objLabel.Size = New-Object System.Drawing.Size(100,$H)
@@ -112,8 +115,8 @@ if ($Global:Collection.Count -gt 1)
     $OKButton.Name = "OK"
     $OKButton.BackColor=1
     $OKButton.DialogResult = "OK"
-    #Die folgende Zeile ordnet dem Click-Event die Schließen-Funktion für das Formular zu
-    $OKButton.Add_Click({Collection-Selection})
+    # Mit drücken der OK-Taste wird die Funktion zur RD-Collection auswahl ausgeführt
+    $OKButton.Add_Click({Select-RDCollection})
     $objForm.Controls.Add($OKButton)
 
     $CancelButton = New-Object System.Windows.Forms.Button
@@ -124,29 +127,31 @@ if ($Global:Collection.Count -gt 1)
     $CancelButton.Name = "Abbrechen"
     $CancelButton.BackColor=1
     $CancelButton.DialogResult = "Cancel"
-    #Die folgende Zeile ordnet dem Click-Event die Schließen-Funktion für das Formular zu
-    $CancelButton.Add_Click({script-exit})
+    # Mit drücke der Cancel-Taste wird das Skript beendet
+    $CancelButton.Add_Click({Exit-Script})
     $objForm.Controls.Add($CancelButton)
 
     [void] $objForm.ShowDialog()
-    # Skript abbrechen  
+
+    # Skript abbrechen, wenn Abbrechen geklickt wurde  
     if (($Global:Cancel -eq "Cancel") -or ($Global:Cancel -eq "Error")){Write-Host $Global:Cancel -ForegroundColor RED; break}       
     }
+## Abfrage Farm Ende
+
 
 # Abfrage der Sessionshost innerhalb der Farm
-$RDSH=Get-RDSessionHost -ConnectionBroker $Broker -CollectionName $Global:Collection
+$RDSH=Get-RDSessionHost -ConnectionBroker $Broker -CollectionName $Global:Collection | Sort-Object SessionHost
 
 #-------------------------------------------------------------------------------------------
 # Formular
 #-------------------------------------------------------------------------------------------
 
+# Formular Grundeinstellungen festlegen
 $objForm = New-Object System.Windows.Forms.Form
-
 $objForm.Backcolor='lightblue'
 $objForm.StartPosition = "CenterScreen"
 $objForm.Size = New-Object System.Drawing.Size(400,300)
 $objForm.Text = "WTS-Anmeldung sperren"
-#$objForm.WindowState = 3
 
 # X1 linker Rand, X2=linker Rand Eingabefelder, H = Höhe
 $X1=10
@@ -156,7 +161,7 @@ $H=20
 
 # Formularfelder definieren
 
-# Brokerserver
+# Feld: Brokerserver
 $objLabel1 = New-Object System.Windows.Forms.Label
 $objLabel1.Location = New-Object System.Drawing.Point($x1,20)
 $objLabel1.Size = New-Object System.Drawing.Size(80,$H)
@@ -168,7 +173,7 @@ $objBroker.Size = New-Object System.Drawing.Size(180,$H)
 $objBroker.Text=$Broker
 $objForm.Controls.Add($objBroker)
 
-# Collection
+# Feld: Collection
 $objLabel2 = New-Object System.Windows.Forms.Label
 $objLabel2.Location = New-Object System.Drawing.Point($x1,50)
 $objLabel2.Size = New-Object System.Drawing.Size(80,$H)
@@ -180,13 +185,14 @@ $objFarm.Size = New-Object System.Drawing.Size(180,$H)
 $objFarm.Text=$Global:Collection
 $objForm.Controls.Add($objFarm)
 
-#SessionHost
+# Feld: SessionHost
 $objLabel3 = New-Object System.Windows.Forms.Label
 $objLabel3.Location = New-Object System.Drawing.Point($x1,80)
 $objLabel3.Size = New-Object System.Drawing.Size(300,$H)
 $objLabel3.Text = 'Bitte zu sperrende Terminalserver wählen:'
 $objForm.Controls.Add($objLabel3)
 
+# SessionHosts anhand der Anzahl hinzufügen
 $i=0
 for ($i=0;$i -lt $RDSH.Count; $i++) {
     $objCheckbox= New-Object System.Windows.Forms.Checkbox 
@@ -195,7 +201,6 @@ for ($i=0;$i -lt $RDSH.Count; $i++) {
     $obj=$objCheckbox.Location = New-Object System.Drawing.Size($x2,$y) 
     $objCheckbox.Size = New-Object System.Drawing.Size(200,20)
     $objCheckbox.Text = $RDSH[$i].SessionHost
-
     $objCheckbox.Checked = $RDSH[$i].NewConnectionAllowed
     $objCheckbox.TabIndex = $i
     $objForm.Controls.Add($objCheckbox)       
@@ -212,8 +217,8 @@ $OKButton.Text = "OK"
 $OKButton.Name = "OK"
 $OKButton.BackColor=1
 $OKButton.DialogResult = "OK"
-#Die folgende Zeile ordnet dem Click-Event die Schließen-Funktion für das Formular zu
-$OKButton.Add_Click({Hauptprogramm})
+# Mit drücken der OK-Taste wird die Funktion zum setzen des Anmeldestatus ausgeführt
+$OKButton.Add_Click({Set-SessionHostLogonState})
 $objForm.Controls.Add($OKButton)
 
 $CancelButton = New-Object System.Windows.Forms.Button
@@ -224,12 +229,17 @@ $CancelButton.Text = "Abbrechen"
 $CancelButton.Name = "Abbrechen"
 $CancelButton.BackColor=1
 $CancelButton.DialogResult = "Cancel"
-#Die folgende Zeile ordnet dem Click-Event die Schließen-Funktion für das Formular zu
+# Mit drücken der Cancel-Taste wird das Skript beendet
 $CancelButton.Add_Click({$objForm.Close()})
 $objForm.Controls.Add($CancelButton)
 
+# Formular ausgeben
 [void] $objForm.ShowDialog()
 
+#-------------------------------------------------------------------------------------------
+# Formular Ende
+#-------------------------------------------------------------------------------------------
+
 # Skript beenden
-exit
+Exit
 
