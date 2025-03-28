@@ -1,0 +1,2 @@
+Set-ItemProperty -Path "HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\MSTeams_8wekyb3d8bbwe\TeamsTfwStartupTask" -Name State -Value 0
+Read-Host "Autostart für Teams 2 wurde deaktiviert"
