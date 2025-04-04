@@ -1,5 +1,5 @@
 # Skript zum installieren oder aktualisieren von Teams 2 auf Terminalservern
-# Stannek GmbH - v.1.1 - 28.03.2025 - E.Sauerbier
+# Stannek GmbH - v.1.2 - 04.04.2025 - E.Sauerbier
 
 # Parameter
 $UrlMSTeams = "https://go.microsoft.com/fwlink/?linkid=2196106"
@@ -65,7 +65,9 @@ $OldTeams = try{Get-Package -Name "Teams Machine-Wide Installer" -ErrorAction Si
 
 # Edge WebView installieren, falls noch nicht vorhanden
 If (!(Test-Path -Path $PathEdgeWebView)) {
-                Start-BitsTransfer -Source 'https://go.microsoft.com/fwlink/?linkid=2124701' -Destination "$TEMPPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Description "Download latest EdgeWebView Runtime"
+                Write-Host "Starte Download von Edge Webview" -ForegroundColor Yellow
+                try {Start-BitsTransfer -Source 'https://go.microsoft.com/fwlink/?linkid=2124701' -Destination "$TEMPPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Description "Download latest EdgeWebView Runtime" -Verbose -ErrorAction Stop}
+                Catch {Throw "Fehler beim Download: $($_.Exception.Message)"}
                 Write-Host "`nInstall EdgeWebView Runtime. Please wait.`n"
                 Start-Process -wait -FilePath "$InstallPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Args "/silent /install" -Verbose
                 }
@@ -83,9 +85,12 @@ $OldMeetingAddIn = try{get-package -Name 'Microsoft Teams Meeting Add-in*' -Erro
 # Download und Update starten
 If ($VersionOS -eq "202x") {
     ## Installation auf Server 202x
-    # starte Download der Installer
-    Start-BitsTransfer -Source $UrlMSTeams -Destination "$TEMPPath\MSTeams-x64.msix" -Description "Download latest Microsoft teams version" -Verbose
-    Start-BitsTransfer -Source $UrlBootstrapper  -Destination "$TEMPPath\teamsbootstrapper.exe" -Description "Download teams bootstrapper" -Verbose
+    Write-Host "Starte Download von MSTeams x64" -ForegroundColor Yellow
+    try {Start-BitsTransfer -Source $UrlMSTeams -Destination "$TEMPPath\MSTeams-x64.msix" -Description "Download latest Microsoft teams version" -Verbose -ErrorAction Stop}
+    Catch {Throw "Fehler beim Download: $($_.Exception.Message)"}
+    Write-Host "Starte Download von MSTeams Bootstrapper" -ForegroundColor Yellow
+    try {Start-BitsTransfer -Source $UrlBootstrapper  -Destination "$TEMPPath\teamsbootstrapper.exe" -Description "Download teams bootstrapper" -Verbose -ErrorAction Stop}
+    Catch {Throw "Fehler beim Download: $($_.Exception.Message)"}
 
     # Installiere/Update Teams auf Server 202x
     Start-Process -wait -FilePath "$TEMPPath\teamsbootstrapper.exe" -Args "-p -o ""$TEMPPath\MSTeams-x64.msix""" -NoNewWindow -Verbose
@@ -95,18 +100,21 @@ If ($VersionOS -eq "202x") {
     }
 Else {
     ## Installation auf Server 2019 
-    # starte Download der Installer
-     Start-BitsTransfer -Source $UrlMSTeams -Destination "$TEMPPath\MSTeams-x64.msix" -Description "Download latest Microsoft teams version" -Verbose
-     (New-Object Net.WebClient).DownloadFile($UrlNativeUtility,"$TEMPPath\MSTeamsNativeUtility.msi")
+    Write-Host "Starte Download von MSTeams x64" -ForegroundColor Yellow
+    try {Start-BitsTransfer -Source $UrlMSTeams -Destination "$TEMPPath\MSTeams-x64.msix" -Description "Download latest Microsoft teams version" -Verbose -ErrorAction Stop}
+    Catch {Throw "Fehler beim Download $($_.Exception.Message)"}
 
-     # Installiere/Update NativeUtility auf Server 2019
-     Start-Process "msiexec" -ArgumentList @("/i ""$TEMPPath\MSTeamsNativeUtility.msi""","/qn","/norestart ALLUSERS=1""") -Wait
+    Write-Host "Starte Download von MSTeams NativeUtility" -ForegroundColor Yellow
+    (New-Object Net.WebClient).DownloadFile($UrlNativeUtility,"$TEMPPath\MSTeamsNativeUtility.msi")
+
+    # Installiere/Update NativeUtility auf Server 2019
+    Start-Process "msiexec" -ArgumentList @("/i ""$TEMPPath\MSTeamsNativeUtility.msi""","/qn","/norestart ALLUSERS=1""") -Wait
      
-     # Installiere/Update Teams auf Server 2019
-     Start-Process -NoNewWindow -wait -FilePath DISM.exe -Args "/Online /Add-ProvisionedAppxPackage /PackagePath:$TEMPPath\MSTeams-x64.msix /SkipLicense" -Verbose
+    # Installiere/Update Teams auf Server 2019
+    Start-Process -NoNewWindow -wait -FilePath DISM.exe -Args "/Online /Add-ProvisionedAppxPackage /PackagePath:$TEMPPath\MSTeams-x64.msix /SkipLicense" -Verbose
 
-     # Warte bis fertig
-     Start-Sleep -Seconds 45
+    # Warte bis fertig
+    Start-Sleep -Seconds 45
     }
 
 # Registry Keys fuer VDI und Citrix setzen
@@ -137,3 +145,15 @@ Start-Process "c:\windows\System32\regsvr32.exe" -ArgumentList @("/s","/n","/i:u
 
 # Bereinige Installer
 Get-ChildItem -Path $($TEMPPath+"\*") -Include *.exe,*.msi,*.msix | Where-Object Name -like "*Teams*" | Remove-Item -Force -Verbose
+
+# Checke Installation
+$CheckMeetingAddIn = try{get-package -Name 'Microsoft Teams Meeting Add-in*' -ErrorAction SilentlyContinue}catch{$null}
+$CheckMSTeams = Get-AppPackage -Name MSTeams
+
+If ($Null -eq $CheckMeetingAddIn) {Write-Error "Fehler bei der Installation vom Meeting Add-in"}
+Else {Write-Host "Das Meeting Add-in ist in der Version $($CheckMeetingAddIn.Version) installiert" -ForegroundColor Green}
+If ($Null -eq $CheckMSTeams) {Write-Error "Fehler bei der Installation vom MSTeams"}
+Else {Write-Host "MSTeams ist in der Version $($CheckMSTeams.Version) installiert" -ForegroundColor Green}
+
+# Skript fertig
+Read-Host "Zum beenden beliebige Taste druecken"
