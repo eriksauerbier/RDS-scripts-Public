@@ -1,5 +1,5 @@
 # Skript zum installieren oder aktualisieren von Teams 2 auf Terminalservern
-# Stannek GmbH - v.1.2 - 04.04.2025 - E.Sauerbier
+# Stannek GmbH - v.1.2.1 - 02.05.2025 - E.Sauerbier
 
 # Parameter
 $UrlMSTeams = "https://go.microsoft.com/fwlink/?linkid=2196106"
@@ -69,7 +69,7 @@ If (!(Test-Path -Path $PathEdgeWebView)) {
                 try {Start-BitsTransfer -Source 'https://go.microsoft.com/fwlink/?linkid=2124701' -Destination "$TEMPPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Description "Download latest EdgeWebView Runtime" -Verbose -ErrorAction Stop}
                 Catch {Throw "Fehler beim Download: $($_.Exception.Message)"}
                 Write-Host "`nInstall EdgeWebView Runtime. Please wait.`n"
-                Start-Process -wait -FilePath "$InstallPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Args "/silent /install" -Verbose
+                Start-Process -wait -FilePath "$TEMPPath\MicrosoftEdgeWebView2RuntimeInstallerX64.exe" -Args "/silent /install" -Verbose
                 }
 Else {Write-Host "EdgeWebview Runtime bereits installiert" -ForegroundColor Green}
 
