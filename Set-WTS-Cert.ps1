@@ -8,3 +8,4 @@ foreach ($c in $certs) {
 		#wmic /namespace:\\root\CIMV2\TerminalServices PATH Win32_TSGeneralSetting Set SSLCertificateSHA1Hash=$t 
     } 
 }
+}
